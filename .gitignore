@@ -2,3 +2,4 @@ venv/
 .env
 .cache/
 __pycache__/
+debug/

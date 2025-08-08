@@ -3,6 +3,8 @@ import argparse, sys
 from pathlib import Path
 from tqdm import tqdm
 import pandas as pd
+import traceback
+traceback.print_exc()
 
 # ⬇️  Excel-aware helpers
 from .io_utils import (
@@ -14,7 +16,7 @@ from .io_utils import (
     wipe_fragments,
     OUTPUT_DEFAULT,
 )
-from .linkedin_scraper import LinkedInScraper
+from .linkedin_scraper import LinkedInScraper, NoGoodMatchFound
 
 
 def parse_args(argv=None):
@@ -55,10 +57,12 @@ def main(argv=None):
     scraper.login()
 
     rows = []
+    unmatched_rows = []
+
     for record in tqdm(df_in.itertuples(index=False), total=len(df_in)):
         school_id, school_name = record.id, record.name
         if school_id in already_done:
-            rows.append(df_out[df_out["id"] == school_id].iloc[0])
+            rows.append(df_out[df_out["id"] == school_id].iloc[0].to_dict())
             continue
 
         tmp_frag = output_path.parent / f"{school_id}.contacts.tmp"
@@ -68,6 +72,13 @@ def main(argv=None):
             scraper.search_school(school_name)
             contacts = scraper.harvest_profiles(school_name)
             rows.append({"id": school_id, "name": school_name, "contacts": contacts})
+
+        # CATCH THE NEW EXCEPTION SEPARATELY
+        except NoGoodMatchFound as e:
+            print(f"🟡 Skipping school: {e}")
+            unmatched_rows.append({"id": school_id, "name": school_name})
+            continue # Move to the next school
+
         except Exception as e:
             print(f"❌  Error on {school_name}: {e}", file=sys.stderr)
             continue
@@ -75,10 +86,22 @@ def main(argv=None):
             wipe_fragments(tmp_frag)
 
         # ➡️  incremental Excel write
-        atomic_write_excel(pd.DataFrame(rows), output_path)
+        if rows: # Ensure rows is not empty before creating DataFrame
+             atomic_write_excel(pd.DataFrame(rows), output_path)
 
     scraper.close()
-    atomic_write_excel(pd.DataFrame(rows), output_path)
+    
+    # Final write of all successful rows
+    if rows:
+        atomic_write_excel(pd.DataFrame(rows), output_path)
+    
+    # WRITE THE UNMATCHED SCHOOLS FILE AT THE END
+    if unmatched_rows:
+        unmatched_output_path = output_path.parent / "unmatched_schools.xlsx"
+        print(f"ℹ️  Writing {len(unmatched_rows)} unmatched schools to {unmatched_output_path}")
+        unmatched_df = pd.DataFrame(unmatched_rows)
+        atomic_write_excel(unmatched_df, unmatched_output_path)
+
     print(f"✅  Finished. Results in {output_path}")
 
 

@@ -20,3 +20,5 @@ class Selectors:
     CONTACT_MODAL_BODY = (By.CSS_SELECTOR, 'div.pv-profile-section__section-info')
     CONTACT_MODAL_UPSELL = (By.CSS_SELECTOR, 'div.card-upsell-v2__text-container')
     CONTACT_MODAL_CLOSE = (By.CSS_SELECTOR, 'button.artdeco-modal__dismiss')
+    PILL_CURRENT_COMPANY = (By.ID, "searchFilter_currentCompany")
+
