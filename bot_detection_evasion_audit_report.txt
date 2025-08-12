@@ -1,0 +1,196 @@
+# Bot-Detection Evasion Audit Report
+
+## 1. Executive Summary
+This report audits the current bot-detection evasion posture of the LinkedIn scraper and documents the latest improvements implemented. The scraper now uses `undetected-chromedriver`, an authenticated residential proxy with extension-based auth, internalized anti-tracking scripts via CDP, diversified and tab-isolated “innocent actions,” a one-time “warm-up” phase for the browser profile, automatic Chrome version detection, Bezier-curve mouse movements, and iterative, crash-safe saving. Verification hooks were added to prove proxy connectivity at runtime.
+
+Overall stealth has improved materially; however, detection remains an arms race. Additional telemetry, per-account behavioral pacing, IP region discipline, and fingerprint diversification can further harden the system.
+
+## 2. Current Evasion Methods (Implemented)
+
+### 2.1 Driver & Browser Configuration
+- **Stealth driver**: `undetected-chromedriver` (uc) for auto-patched binaries and evasions (Cloudflare/Akamai class checks).
+- **Automatic version detection**: Detects installed Chrome major version at runtime and passes it to uc (no more hardcoded `version_main`).
+- **Persistent user profile**: Uses `CHROME_USER_DATA_DIR` and `CHROME_PROFILE_DIRECTORY` for stable session continuity (cookies, history, login state).
+- **Maximized window**: `driver.maximize_window()` to avoid default/suspicious viewport.
+- **Internalized anti-tracking (CDP)**: Uses `Page.addScriptToEvaluateOnNewDocument` to remove LinkedIn’s analytics script `snap.licdn.com/li.lms-analytics/insight.min.js` before it runs; no reliance on TamperMonkey.
+
+### 2.2 Network, Proxies, and Anonymity
+- **Residential proxy (Data Impulse)**: When `USE_DATA_IMPULSE=true`, traffic is routed through residential IPs.
+- **Extension-based proxy auth**: A lightweight, auto-generated Chrome extension configures proxy rules and handles credentialed proxy authentication via `chrome.proxy` and `webRequest.onAuthRequired`.
+- **Proxy verification on startup**: Visits `https://api.ipify.org/` and prints current public IP to confirm the proxy is in effect.
+
+### 2.3 Session & Authentication
+- **Cookie-first login**: Attempts cached cookies → system Chrome cookies (DPAPI) → credentials entry only if needed; then re-caches cookies.
+- **Persistent cookies**: Maintains logged-in state across runs for realistic account continuity.
+
+### 2.4 Behavioral Emulation (Humanization)
+- **Variable dwell**: Random `_human_delay` between actions.
+- **Typing cadence**: `_human_type` character-by-character input.
+- **Bezier mouse movement**: `_move_and_click` now moves along a quadratic Bezier curve with micro-pauses, then clicks; scroll-into-view guard and robust fallback.
+- **Human-like tab opening**: Profile links opened via CTRL/CMD-click simulation instead of `window.open()`.
+- **Contextual searching**: Reuses on-page search bar when possible; only falls back to `/feed` if necessary.
+- **Tab-isolated “innocent actions”**: `_perform_innocent_action()` opens a new tab, performs a random benign action (feed scroll, My Network, Notifications, own profile), then always closes the tab and returns to the original handle via `try/finally`. This preserves exact iteration state.
+- **One-time “warm-up” phase**: On first run per profile, visits Google/Wikipedia/BBC in new tabs, scrolls lightly, then closes. A flag file prevents repeats, enriching history/cookies for natural profile fingerprints.
+
+### 2.5 Pacing, Safety & Persistence
+- **Daily activity limit**: `MAX_PROFILES_PER_DAY` to cap work volume.
+- **Iterative saving**: Harvesting is a generator; each profile is extracted and immediately written to Excel—crash-safe mid-run.
+- **Skip logic**: On startup, both previous output and previously unmatched schools are loaded and skipped appropriately.
+
+### 2.6. Throttling & Pacing
+*   **Daily Profile Limit**: A configurable daily limit (`MAX_PROFILES_PER_DAY`) is enforced to prevent an unusually high volume of activity that could trigger account flagging.
+
+### 2.6. External Evasion (User-Managed)
+*   **Tracking Script Blocker**: The user is employing a TamperMonkey script to find and remove a known LinkedIn analytics/fingerprinting script (`insight.min.js`).
+*   **WebDriver Flag Override**: The same TamperMonkey script overrides the `navigator.webdriver` flag. This is redundant, as `undetected-chromedriver` already does this, but it provides a harmless layer of defense.
+
+## 3. Verification & Observability
+- **Proxy proof**: On startup, the scraper hits `api.ipify.org` and prints the IP—confirms proxy path.
+- **Anti-tracking injection proof**: CDP injection is executed once at startup and logged ("Anti-tracking script has been internalized.").
+- **Tab isolation logs**: Innocent action wrapper logs when switching to a new tab and when returning, ensuring context restoration.
+- **Crash safety**: Each extracted profile is persisted immediately; restarts continue from the next school/record.
+
+## 4. Blind Spots & Potential Weaknesses (Remaining)
+- **Provider-managed rotation**: IP rotation is fully delegated to Data Impulse gateway. There is no in-script scheduling/verification that rotation occurred between actions or per school; IP region discipline (per account) is not enforced.
+- **Fingerprint surface beyond webdriver**: While uc patches common signals, deeper surfaces (Canvas/WebGL entropy, client hints, hardware concurrency, timezone-locale consistency) are only partially addressed.
+- **Behavioral baselines**: Even with variety, the sequence “search → people filter → iterate profiles” remains systematic. Additional organic behaviors (messages, company pages, occasional dead-ends, short backtracks) could further humanize.
+- **Anti-tracking heuristics drift**: Blocking `insight.min.js` helps, but LinkedIn can shift logic to other bundles or server-side checks. CDP injection must be maintained.
+- **Warm-up realism**: Single warm-up set across all runs may be predictable over time. Occasional, randomized warm-up events would be more lifelike.
+- **Viewport & device consistency**: Maximize is good; however, stable viewport size tied to a consistent display profile (DPR, UA client hints) may be safer than full-screen in some setups.
+
+## 5. Open Questions & Doubts
+- **Is rotation aligned with account region?** If the account is US-based and proxies jump globally, that can look suspicious. Should we lock to a region per account?
+- **Do we need deeper fingerprint shaping?** E.g., consistent `navigator.userAgentData`, Canvas/WebGL seeds, font lists, media devices.
+- **Is mouse-path fidelity sufficient?** Bezier helps, but do we need path velocity profiles and sub-pixel jitter to mirror high-frequency device sampling?
+- **Activity rhythm realism?** Are business-hours scheduling and lunch/break patterns desired to reduce anomalies?
+
+## 6. Recommendations
+
+### 6.1 Already Implemented in This Iteration
+- Switch to `undetected-chromedriver` with automatic Chrome version detection.
+- Residential proxy with extension-based authentication; runtime public IP verification.
+- Internalized anti-tracking (CDP) for early script-block.
+- Diversified, tab-isolated “innocent actions” with robust return-to-context.
+- One-time browser profile warm-up; scrolling and light interaction.
+- Bezier-curve mouse movement with scroll-into-view guard and fallback.
+- Iterative, crash-safe saving to Excel; skip logic for previous output and unmatched.
+
+### 6.2 Next Steps (High Impact)
+1. **IP rotation discipline & telemetry**
+   - Add an optional “rotate-and-verify” hook between schools: record public IP before/after; log region (GeoIP lookup) to ensure consistency.
+   - Enforce per-account region affinity in proxy configuration (e.g., US-only for a US-based account).
+2. **Broaden fingerprint shaping**
+   - Stabilize UA client hints, language, timezone, and platform to a coherent persona.
+   - Add optional Canvas/WebGL noise seeding to reduce cross-session linkage.
+3. **Richer behavioral model**
+   - Introduce occasional off-task flows: view company pages, open a job, short message compose/cancel, revisit prior profiles.
+   - Schedule runs within business hours for the proxy’s region; add lunch/break pauses.
+4. **Periodic warm-up**
+   - Instead of one-time only, periodically (e.g., weekly) run a small randomized warm-up sequence with a rotating site list.
+5. **Observability bundle**
+   - Centralize logs: proxy IP, region, timing metrics, action sequence traces.
+   - Optional “shadow mode” to dry-run interactions and capture page telemetry without committing actions.
+
+---
+If you want, I can prioritize implementing: (a) IP rotation verification and geo-discipline, (b) client-hint/timezone persona stabilization, and (c) expanded behavioral flows with business-hours scheduling. These will compound the stealth benefits already in place.
+
+## 8. Changes Implemented Since Previous Audit
+
+- User-Agent realism: now fetches real Chrome versions from Google's Version History API and uses a full version string in the UA. The major version is passed to the driver; the full version is used in the UA string.
+- Holistic UA persona: legacy UA, UA-CH (Client Hints) metadata, and Accept-Language header are now set coherently via CDP (Network.setUserAgentOverride + Network.setExtraHTTPHeaders). This removes the UA vs UA-CH inconsistency class.
+- Out-of-band proxy verification and IP snapshots: IP/geo checks now use the `requests` library with the active proxy (no in-tab navigation to IP sites).
+- Expanded fingerprint shaping:
+  - WebGL spoofing is platform-aware and also applied to WebGL2; OffscreenCanvas operations get subtle noise.
+  - Canvas fingerprinting seeded via subtle noise; toDataURL lightly perturbed.
+  - AudioContext slight frequency offsets.
+  - `navigator` shaping for `hardwareConcurrency`, `deviceMemory`, `plugins`, `languages`.
+- Human interaction fidelity:
+  - Removed JS click fallbacks that produce `Event.isTrusted=false`; clicks now use trusted events.
+  - Warm-up actions perform realistic interactions per site (searching/clicking/scrolling) instead of quick open/close.
+  - Innocent actions on LinkedIn are longer-lived with scrolling, hovering, and occasional interactions.
+  - Profile and contact-modal dwell times now vary in a human-like way and depend on content length.
+  - Scrolling patterns now use partial, human-like increments with pauses and occasional back-scrolling.
+
+## 9. Updated Line-by-Line Weakspot Assessment (scraper/linkedin_scraper.py)
+
+Line numbers refer to current code at audit time (approximate anchors via function definitions).
+
+- 40 `get_real_chrome_versions()`
+  - Strength: real version sourcing reduces UA anomalies.
+  - Weakspot: no pinning to platform/channel (e.g., Stable on Windows) beyond what API returns; acceptable.
+
+- 149 `_build_realistic_user_agent()`
+  - Strength: uses full version string; more realistic UA.
+  - Weakspot: still legacy UA only; UA-CH not shaped; Accept-Language header not aligned to `navigator.languages`.
+
+- 323 `get_network_snapshot()` / 363 `log_network_snapshot()`
+  - Strength: fully out-of-band via `requests`; no in-tab navigation.
+  - Weakspot: none material; ensure proxy creds/affinity match browser proxy path to avoid split-brain IPs.
+
+- 761 `_build_driver()`
+  - UA/UA-CH/Accept-Language now set coherently via CDP (Network.setUserAgentOverride + userAgentMetadata, and Network.setExtraHTTPHeaders). This removes the legacy UA vs UA-CH mismatch.
+  - `driver.maximize_window()` can result in atypically large/stable viewport; consider fixed, device-typical viewport.
+  - CDP injection expanded (WebGL/WebGL2/OffscreenCanvas/Canvas/Audio, navigator props). Good coverage, but see notes below on detectability.
+  - Proxy extension is still Manifest V2; deprecation risk remains.
+
+- 802–1045 CDP injection bundle
+  - Strengths:
+    - Removes known LinkedIn analytics script without console logging.
+    - Platform-aware WebGL and coverage for WebGL2/OffscreenCanvas.
+    - Canvas/Audiocontext subtle noise; navigator shaping for cores, memory, plugins, languages.
+  - Weakspots:
+    - UA-CH grease brand is static; real grease brand strings rotate. Consider rotating or omitting grease brand for closer realism.
+    - PlatformVersion/architecture values are hardcoded examples and may not match the actual OS version/bitness on the host; consider deriving from OS (and setting bitness/wow64 in metadata) to avoid subtle inconsistencies.
+    - Plugins spoofing uses `Plugin`/`PluginArray` emulation that may not perfectly mirror native objects (enumerability/descriptors/constructability). Risk of detection if probed.
+    - Device memory/cores are static; consider persona-driven variability across sessions.
+    - Canvas noise via `getImageData`/`toDataURL` overrides can be detectably patched (function.toString) and may alter legitimate canvas usage (low risk here).
+    - AudioContext oscillator modifications may not affect common fingerprint paths (often use analyser/compressor); minor benefit.
+
+- 1051 `_verify_proxy()`
+  - Strength: out-of-band IP/geo with proxy; logs region.
+  - Weakspot: none material.
+
+- 1539 `_open_current_company_dropdown()`
+  - Strength: trusted-event pathways; reduced reliance on JS-click/elementFromPoint.
+  - Weakspot: aggressive retries may look mechanical; acceptable.
+
+- 1638 `_get_page_numbers()`
+  - Weakspot: still forces to absolute bottom before parsing; now mitigated by natural scroll elsewhere, but consider locating the pagination without bottom scroll if present.
+
+- 1705 `_click_next_page()`
+  - Strength: trusted events; robust change detection.
+  - Weakspot: none material.
+
+- 1754 `harvest_profiles()`
+  - Strength: removed post-pagination IP checks; keeps context intact.
+  - Weakspot: none material.
+
+- 1789 `_harvest_current_page()`
+  - Strength: natural partial scroll with pauses/back-scroll; better realism.
+  - Weakspot: still foreground-opens each profile tab and immediate focus switch; consider background-open some of the time.
+
+- 1926 `_extract_profile_current_tab()`
+  - Strength: content-dependent reading delays; contact modal dwell and close delays.
+  - Weakspot: still removes upsell nodes; low risk but could deviate from expected DOM if integrity checks exist.
+
+- 2196 `_collect_profile_links()`
+  - Strength: natural partial scrolling to load and collect links.
+  - Weakspot: none material.
+
+- 1678 and 2275 duplicate `_current_results_marker()` definitions
+  - Weakspot: code duplication remains; no stealth impact but maintainability issue.
+
+### Residual/Pre-existing Weakspots (priority order)
+
+- UA vs UA-CH mismatch: Addressed. UA-CH metadata and Accept-Language are now aligned with the legacy UA via CDP.
+- Viewport and device persona: always maximizing window; consider a stable, device-typical viewport and coherent DPR/screen metrics.
+- Proxy extension (MV2): deprecation risk; consider moving to MV3 or native proxy capabilities if feasible.
+- Plugins spoof fidelity: emulate object shapes and descriptors more precisely or avoid spoofing if not necessary on target domain.
+- Behavioral rhythm: consider business-hours scheduling and longer, variable session patterns; occasional background-opening of links before focusing.
+- Warm-up persona: align sites/regions to account locale; occasional logins to common services may improve coherence.
+
+## 10. High-level summary of current posture
+
+- Major regressions removed: no more in-tab IP checks; no JS click fallbacks; richer innocuous activity; realistic scrolling and dwell times.
+- Fingerprint surface substantially improved (WebGL/Canvas/Audio/navigator), but UA-CH and viewport persona still need attention.
+- Remaining risks are now mostly around persona coherence (headers/UA-CH/viewport), extension footprint, and subtle JS object spoof fidelity.

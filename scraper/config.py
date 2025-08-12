@@ -20,3 +20,20 @@ CACHE_DIR.mkdir(exist_ok=True)
 COOKIE_FILE = CACHE_DIR / "linkedin_cookies.json" 
 CHROME_DEBUG_PORT = int(os.getenv("CHROME_DEBUG_PORT", "0"))
 FORCE_CLOSE_CHROME = os.getenv("FORCE_CLOSE_CHROME", "1") == "1"
+PROXY = os.getenv("PROXY")
+MAX_PROFILES_PER_DAY = int(os.getenv("MAX_PROFILES_PER_DAY", "100000"))
+
+# --- Data Impulse Proxy Settings ---
+USE_DATA_IMPULSE = os.getenv("USE_DATA_IMPULSE", "true").lower() == "true"
+DI_USERNAME = os.getenv("DI_USERNAME", "7cc48bb6d6d7def4bd6e")
+DI_PASSWORD = os.getenv("DI_PASSWORD", "aa3ca30260efd8ec")
+DI_HOST = os.getenv("DI_HOST", "gw.dataimpulse.com")
+DI_PORT = int(os.getenv("DI_PORT", "823"))
+# Optional geo parameters
+GEO_ENFORCE = os.getenv("GEO_ENFORCE", "1") == "1"
+DI_COUNTRY = os.getenv("DI_COUNTRY")  # e.g., "us", "gb"; if unset and GEO_ENFORCE=1, we will infer
+TZ_TOLERANCE_HOURS = int(os.getenv("TZ_TOLERANCE_HOURS", "1"))
+DI_STICKY_SESSION = os.getenv("DI_STICKY_SESSION")  # optional sticky/session id
+
+# Warm-up behavior: "always" or "once"
+WARM_UP_MODE = os.getenv("WARM_UP_MODE", "always").lower()  # always | once

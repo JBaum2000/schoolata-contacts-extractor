@@ -5,15 +5,21 @@ Many use `aria-label`, `role` or `data-test-*` attributes that rarely change.
 from selenium.webdriver.common.by import By
 
 class Selectors:
-    SEARCH_BOX = (By.CSS_SELECTOR, 'input[role="combobox"][aria-label="Search"]')
-    PILL_PEOPLE = (By.XPATH, '//button[normalize-space()="People"]')
-    PILL_CURRENT_COMPANY = (By.XPATH, '//button[@aria-label="Current company filter. Clicking this button displays all Current company filter options."]')
+    # SEARCH_BOX = (By.CSS_SELECTOR, 'input[role="combobox"][aria-label="Search"]')
+    # PILL_PEOPLE = (By.XPATH, '//button[normalize-space()="People"]')
+    # PILL_CURRENT_COMPANY = (By.XPATH, '//button[@aria-label="Current company filter. Clicking this button displays all Current company filter options."]')
+    SEARCH_BOX = (By.CSS_SELECTOR, 'input[placeholder="Buscar"]')
+    PILL_PEOPLE = (By.XPATH, '//button[normalize-space()="Personas"]')
+    # PILL_CURRENT_COMPANY = (By.XPATH, '//button[@aria-label="Filtro «Empresa actual». Al hacer clic en este botón, se muestran todas las opciones del filtro «Empresa actual».Filtro «Empresa actual». Al hacer clic en este botón, se muestran todas las opciones del filtro «Empresa actual»"]')
     CURRENT_COMPANY_LIST = (By.CSS_SELECTOR, 'ul.search-reusables__collection-values-container li')
     CURRENT_COMPANY_LABEL = (By.CSS_SELECTOR, 'label span.t-14')
-    SHOW_RESULTS = (By.XPATH, '//span[normalize-space()="Show results"]/ancestor::button')
+    # SHOW_RESULTS = (By.XPATH, '//span[normalize-space()="Show results"]/ancestor::button')
+    # Robust SHOW_RESULTS selector with multiple fallback strategies
+    SHOW_RESULTS = (By.XPATH, '//button[contains(@aria-label, "mostrar resultados") or contains(@aria-label, "Show results") or contains(@aria-label, "Apply") or (contains(@class, "artdeco-button--primary") and .//span[contains(text(), "resultados") or contains(text(), "results")])]')
     RESULT_LINKS = (By.CSS_SELECTOR, 'a[data-test-app-aware-link][href*="/in/"]')
     PAGINATION_STATE = (By.CSS_SELECTOR, 'div.artdeco-pagination__page-state, span.artdeco-pagination__page-state')
-    PAGINATION_NEXT = (By.XPATH, '//button[@aria-label="Next" and not(@disabled)]')
+    # PAGINATION_NEXT = (By.XPATH, '//button[@aria-label="Next" and not(@disabled)]')
+    PAGINATION_NEXT = (By.XPATH, '//button[@aria-label="Siguiente" and not(@disabled)]')
     MAIN_TEXT = (By.CSS_SELECTOR, 'main')
     CONTACT_INFO_BTN = (By.ID, 'top-card-text-details-contact-info')
     CONTACT_MODAL = (By.CSS_SELECTOR, 'div.artdeco-modal')
